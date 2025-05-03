@@ -1,6 +1,17 @@
 ﻿@page "/"
+@inject NavigationManager NavigationManager
 
 <PageTitle>Home</PageTitle>
+
+@* --- DEV BUTTON --- *@
+<MudButton 
+    Variant="Variant.Filled" 
+    Color="Color.Primary" 
+    OnClick="@(() => NavigationManager.NavigateTo("/chat"))" 
+    Class="mb-4">
+    Go to Chat Page (Dev)
+</MudButton>
+@* --- END DEV BUTTON --- *@
 
 <MudText Typo="Typo.h3" GutterBottom="true">Hello, world!</MudText>
 <MudText Class="mb-8">Welcome to your new app, powered by MudBlazor and the .NET 9 Template!</MudText>

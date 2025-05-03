@@ -1,0 +1,416 @@
+@page "/Chat"
+@using MudBlazor
+@using Microsoft.AspNetCore.Components.Web
+@using Markdig
+@inject NavigationManager NavigationManager
+
+<style>
+    /* Hide native scrollbars but keep vertical scrolling */
+    .no-scrollbar {
+        overflow-y: auto;
+        overflow-x: hidden;
+        -ms-overflow-style: none;  /* IE/Edge */
+        scrollbar-width: none;      /* Firefox */
+    }
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;              /* Chrome/Safari/Opera */
+    }
+
+    /* Kill MudMainContent's top-padding (for an AppBar) */
+    .mud-main-content {
+        padding-top: 0 !important;
+    }
+
+    /* Chat viewport height (subtract header+footer) */
+    .chat-container {
+        overflow-y: auto;
+        height: calc(100vh - 128px);
+    }
+
+    /* User bubble is capped to ~60% width */
+    .user-message {
+        max-width: 60%;
+        margin: auto;
+        line-height: 1.43;
+        font-size: 1rem;
+    }
+
+    /* AI message is plain full-width text */
+    .ai-message {
+        display: block;
+        width: 70%;
+        margin: auto;
+        white-space: normal;
+        line-height: 1.43;
+        padding: 1rem;
+    }
+
+    /* Style the horizontal rule within .ai-message */
+    .ai-message hr {
+        border: none;
+        height: 1px;
+        background-color: var(--mud-palette-primary);
+        padding: 0;
+        margin: 1rem 0;
+    }
+
+    /* Heading styles with padding */
+    .ai-message h1 {
+        padding: 1.5rem 0 1.5rem 0;
+        margin: 0;
+    }
+    .ai-message h2 {
+        padding: 1.25rem 0 1.25rem 0;
+        margin: 0;
+    }
+    .ai-message h3 {
+        padding: 1rem 0 1rem 0;
+        margin: 0;
+    }
+    .ai-message h4,
+    .ai-message h5,
+    .ai-message h6 {
+        padding: 0.75rem 0 0.75rem 0;
+        margin: 0;
+    }
+
+    /* restore list styling inside .ai-message */
+    .ai-message ul,
+    .ai-message ol {
+        padding: 0.75rem;
+        list-style-position: inside;
+    }
+    .ai-message ul li::marker,
+    .ai-message ol li::marker {
+        color: var(--mud-palette-primary);
+    }
+
+    .ai-message li {
+        margin: 1rem 0;
+    }
+
+    /* Style blockquotes within .ai-message */
+    .ai-message blockquote {
+        border-left: 4px solid var(--mud-palette-primary-lighten);
+        padding: 0rem 0rem;
+        margin: 1rem 0;
+        background-color: var(--mud-palette-background-grey);
+        color: var(--mud-palette-text);
+        font-style: italic;
+    }
+
+    /* Ensure paragraphs inside blockquotes don't add extra margin */
+    .ai-message blockquote p {
+        margin-bottom: 0;
+        padding: 0.75rem;
+    }
+
+    /* style links so they look "linky" again */
+    .ai-message a {
+        color: var("red");
+        text-decoration: underline;
+    }
+
+    /* Customized code-block styling */
+    .ai-message pre {
+        background: var(--mud-palette-background);
+        border: 1px solid var(--mud-palette-divider);
+        border-left: 3px solid var(--mud-palette-primary);
+        border-radius: 4px;
+        padding: 0.75rem;
+        margin: 1rem 0;
+        font-family: Consolas, Monaco, 'Courier New', monospace;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        overflow-x: auto;
+    }
+
+    .ai-message pre code {
+        display: block;
+        color: var(--mud-palette-text-primary);
+        background: transparent;
+        white-space: pre;
+    }
+
+    /* Table styling inside .ai-message */
+    .ai-message table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 1rem 0;
+        font-size: 1rem;
+        overflow-x: auto;
+        display: block;
+        border: none; /* Remove outer border */
+    }
+
+    .ai-message th,
+    .ai-message td {
+        border: none; /* Remove all borders */
+        border-bottom: 1px solid var(--mud-palette-divider); /* Only horizontal dividers */
+        padding: 0.75rem 1rem;
+        text-align: left;
+        vertical-align: top;
+    }
+
+    .ai-message th {
+        font-weight: 600;
+        border-bottom: 1px solid var(--mud-palette-drawer-text); /* Distinct divider below headers */
+    }
+
+    /* Make the first row after the header have a distinct border if needed */
+    .ai-message tr:first-of-type td {
+        border-bottom: 1px solid var(--mud-palette-divider);
+    }
+
+
+    .ai-message caption {
+        caption-side: bottom;
+        padding: 0.5rem;
+        color: var(--mud-palette-text-secondary);
+        font-size: 0.95em;
+        text-align: left;
+    }
+
+</style>
+
+
+
+<MudLayout>
+    <MudDrawer
+        @bind-Open="_drawerOpen"
+        Anchor="Anchor.Left"
+        Elevation="1"
+        Variant="DrawerVariant.Persistent"
+        Class="d-flex flex-column"
+    >
+        <MudDrawerHeader Class="d-flex flex-column pa-2">
+            <div class="d-flex align-center justify-space-between">
+                <MudText Typo="Typo.h6">M1 Chat</MudText>
+                <MudIconButton
+                    Icon="@Icons.Material.Filled.ChevronLeft"
+                    OnClick="ToggleDrawer"
+                />
+            </div>
+            <MudButton
+                Variant="Variant.Filled"
+                Color="Color.Primary"
+                Class="mt-2"
+                FullWidth="true"
+            >
+                New Chat
+            </MudButton>
+        </MudDrawerHeader>
+
+        <div class="flex-grow-1 no-scrollbar">
+            <MudList T="string">
+                <MudListItem Text="Chat with Alice" />
+                <MudListItem Text="Project Discussion" />
+                <!-- …etc… -->
+            </MudList>
+        </div>
+
+        <!-- Footer with user email and Logout button -->
+        <div class="pa-2">
+            <MudText Typo="Typo.subtitle2" Class="mb-1">
+                @UserEmail
+            </MudText>
+            <MudButton
+                Variant="Variant.Filled"
+                Color="Color.Secondary"
+                FullWidth="true"
+                OnClick="Logout"
+            >
+                Logout
+            </MudButton>
+        </div>
+    </MudDrawer>
+
+    <MudMainContent
+        Class="d-flex flex-column p-0"
+        Style="height:100vh;overflow:hidden;"
+    >
+        <!-- scrollable chat area -->
+        <MudPaper
+            Elevation="0"
+            Class="chat-container px-2 pb-2 no-scrollbar"
+        >
+            <MudStack Spacing="1">
+                @foreach (var m in ChatHistory)
+                {
+                    if (m.IsUser)
+                    {
+                        <MudStack JustifyContent="FlexEnd">
+                            <MudChatBubble
+                                Variant="Variant.Text"
+                                Class="user-message"
+                            >
+                                @m.Text
+                            </MudChatBubble>
+                        </MudStack>
+                    }
+                    else
+                    {
+                        <MudText Typo="Typo.body1" Class="ai-message">
+                            @((MarkupString)Markdown.ToHtml(
+                                m.Text, _markdownPipeline))
+                        </MudText>
+                    }
+                }
+            </MudStack>
+        </MudPaper>
+
+        <!-- input area -->
+        <MudPaper Elevation="1" Class="pa-2 flex-shrink-0">
+            <MudContainer Class="pa-0">
+                <MudStack Spacing="1">
+                    <div style="display:flex;align-items:center;">
+                        <MudTextField
+                            @bind-Value="MessageText"
+                            Label="Enter your message"
+                            Variant="Variant.Outlined"
+                            Lines="2"
+                            AutoGrow="true"
+                            MaxLines="10"
+                            Class="flex-grow-1 mr-2"
+                            Immediate="true"
+                            @onkeyup="HandleKeyUp"
+                        />
+                        <MudIconButton
+                            Icon="@Icons.Material.Filled.AttachFile"
+                            Color="Color.Primary"
+                            OnClick="AttachFile"
+                            aria-label="Attach file"
+                            Class="mr-2"
+                        />
+                        <MudButton
+                            Variant="Variant.Filled"
+                            Color="Color.Primary"
+                            EndIcon="@Icons.Material.Filled.Send"
+                            OnClick="SendMessage"
+                            aria-label="Send message"
+                        >
+                            Send
+                        </MudButton>
+                    </div>
+                    <div style="display:flex;align-items:center;">
+                        <MudSelect
+                            @bind-Value="ChatSelectedOption"
+                            Label="Select a model"
+                            Variant="Variant.Outlined"
+                            Margin="Margin.Dense"
+                            FitContent="true"
+                            Class="mr-2"
+                        >
+                            @foreach (var opt in ChatOptions)
+                            {
+                                <MudSelectItem Value="@opt">
+                                    @opt
+                                </MudSelectItem>
+                            }
+                        </MudSelect>
+                        <MudToggleIconButton
+                            @bind-Toggled="_searchEnabled"
+                            Icon="@Icons.Material.Filled.Public"
+                            ToggledIcon="@Icons.Material.Filled.PublicOff"
+                            Color="Color.Primary"
+                            ToggledColor="Color.Secondary"
+                            aria-label="Toggle search"
+                            Class="ml-2"
+                        />
+                        <MudText Typo="Typo.body1">Search</MudText>
+                    </div>
+                </MudStack>
+            </MudContainer>
+        </MudPaper>
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private bool _searchEnabled = false;
+
+    // your Markdig pipeline
+    private static readonly MarkdownPipeline _markdownPipeline =
+        new MarkdownPipelineBuilder()
+            .UseAdvancedExtensions()
+            .Build();
+
+    // Placeholder for the logged‐in user's email
+    private string UserEmail { get; set; } = "user@example.com";
+
+    private string MessageText { get; set; } = "";
+    private string ChatSelectedOption { get; set; } =
+        "Gemini 2.5 Pro";
+
+    private List<string> ChatOptions = new()
+    {
+        "Gemini 2.5 Pro",
+        "Gemini 2.5 Flash (Thinking)",
+        "Gemini 2.5 Flash"
+    };
+
+    private List<ChatMessage> ChatHistory = new()
+    {
+        new ChatMessage
+        {
+            IsUser = false,
+            Text = "Hello! I am your assistant. How can I help today?"
+        }
+    };
+
+    void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private async Task HandleKeyUp(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey)
+        {
+            await SendMessage();
+        }
+    }
+
+    private async Task SendMessage()
+    {
+        if (string.IsNullOrWhiteSpace(MessageText))
+        {
+            return;
+        }
+
+        ChatHistory.Add(new ChatMessage
+        {
+            IsUser = true,
+            Text = MessageText.Trim()
+        });
+
+        var prompt = MessageText.Trim();
+        MessageText = "";
+        StateHasChanged(); // Update UI to show user message immediately
+
+        // simulate AI call
+        await Task.Delay(500);
+        // Example Markdown response for testing
+        var aiReply = $"{prompt}";
+        ChatHistory.Add(new ChatMessage
+        {
+            IsUser = false,
+            Text = aiReply
+        });
+        StateHasChanged(); // Update UI to show AI response
+    }
+
+    private void AttachFile()
+        => Console.WriteLine("Attach file clicked.");
+
+    private void Logout()
+    {
+        Console.WriteLine("Logout clicked");
+        // In a real app, you'd clear auth state here
+        NavigationManager.NavigateTo("/");
+    }
+
+    // Simple record to hold message info
+    private record ChatMessage
+    {
+        public bool IsUser { get; init; }
+        public string Text { get; init; } = "";
+    }
+}
