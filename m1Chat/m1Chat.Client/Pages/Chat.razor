@@ -569,6 +569,7 @@
         NavigationManager.NavigateTo($"/Chat?chatId={_chatId}", forceLoad: false);
 
         string generatedName = "";
+        
         try
         {
             await foreach (var chunk in CompletionService.StreamCompletionAsync(
@@ -607,7 +608,7 @@
     _chatHistory.Add(aiMessage);
     _needsScroll = true;
     StateHasChanged();
-
+    var prevTextLength = 0;
     try
     {
         var buffer = new StringBuilder();
@@ -674,6 +675,7 @@
 
                 if (toAdd != null)
                 {
+                  prevTextLength = aiMessage.Text.Length;
                     aiMessage.Text += toAdd;
                     aiMessage.IsStreaming = true; // Maintain streaming state
                     lastUpdate = DateTime.UtcNow;

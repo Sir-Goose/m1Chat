@@ -1,12 +1,13 @@
 @using Markdig
 @inject IJSRuntime Js
 @using Ganss.Xss
+@using System.Text
 
-<div @ref="_aiDiv" class="mud-typography-body1 ai-message @(IsStreaming ? "streaming" : "streaming-complete")"></div>
+<div @ref="_aiDiv" class="mud-typography-body1 ai-message"></div>
 
 @code {
     [Parameter] public string Markdown { get; set; } = "";
-    [Parameter] public bool IsStreaming { get; set; } = false; // Add this parameter
+    [Parameter] public bool IsStreaming { get; set; } = false;
 
     private ElementReference _aiDiv;
     private string _lastMarkdown = "";
@@ -24,17 +25,33 @@
         
         if (Markdown != _lastMarkdown)
         {
+            var newContent = GetNewContent(Markdown, _lastMarkdown);
             _lastMarkdown = Markdown;
+            
             var unsafeHtml = Markdig.Markdown.ToHtml(Markdown, Pipeline);
             var safeHtml = HtmlSanitizer.Sanitize(unsafeHtml);
-            
-            // Add streaming animation class if still streaming
-            if (IsStreaming)
+
+            // Only animate new content during streaming
+            if (IsStreaming && !string.IsNullOrEmpty(newContent))
             {
-                safeHtml = $"<div class='ai-message-streaming-text'>{safeHtml}</div>";
+                // Find the last occurrence of new content and wrap it
+                var lastIndex = safeHtml.LastIndexOf(newContent);
+                if (lastIndex != -1)
+                {
+                    var before = safeHtml.Substring(0, lastIndex);
+                    var after = safeHtml.Substring(lastIndex + newContent.Length);
+                    safeHtml = $"{before}<span class='streaming-text'>{newContent}</span>{after}";
+                }
             }
-            
+
             await Js.InvokeVoidAsync("setInnerHtmlAndRenderMath", _aiDiv, safeHtml);
         }
+    }
+
+    private string GetNewContent(string current, string previous)
+    {
+        if (string.IsNullOrEmpty(previous)) return current;
+        if (current.Length <= previous.Length) return "";
+        return current.Substring(previous.Length);
     }
 }
